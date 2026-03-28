@@ -31,9 +31,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     final List<XFile> selectedImages = await _picker.pickMultiImage();
     if (selectedImages.isNotEmpty) {
       setState(() {
-        _pickedImages = selectedImages;
+        _pickedImages.addAll(selectedImages);
       });
     }
+  }
+
+  void _removeSelectedImage(int index) {
+    setState(() {
+      _pickedImages.removeAt(index);
+    });
   }
 
   Future<void> _addProduct() async {
@@ -123,6 +129,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       appBar: AppBar(
         title: const Text('Ethrah Admin - Add Product'),
         backgroundColor: const Color(0xFF4A342E),
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -132,66 +139,174 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Add New Product',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                'Create New Product',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4A342E),
+                  fontFamily: 'PlayfairDisplay',
+                ),
               ),
               const SizedBox(height: 24),
-              _buildTextField(_nameController, 'Product Name'),
+              _buildTextField(_nameController, 'Product Name', icon: Icons.shopping_bag_outlined),
               const SizedBox(height: 16),
-              _buildTextField(_descController, 'Description', maxLines: 3),
+              _buildTextField(_descController, 'Description', maxLines: 3, icon: Icons.description_outlined),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: _buildTextField(_priceController, 'Price (e.g. 12500)', isNumeric: true)),
+                  Expanded(child: _buildTextField(_priceController, 'Price (₹)', isNumeric: true, icon: Icons.currency_rupee)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildTextField(_categoryController, 'Category (ethnic/jewellery)')),
+                  Expanded(child: _buildTextField(_categoryController, 'Category', icon: Icons.category_outlined)),
                 ],
               ),
-              const SizedBox(height: 16),
-              // Image Picker UI
-              GestureDetector(
-                onTap: _pickImages,
-                child: Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[400]!),
+              const SizedBox(height: 24),
+              
+              // Image Picker Section Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Product Images',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF4A342E)),
+                      ),
+                      if (_pickedImages.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4AF37),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${_pickedImages.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
                   ),
-                  child: _pickedImages.isNotEmpty 
-                    ? ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _pickedImages.length,
-                        padding: const EdgeInsets.all(8),
-                        itemBuilder: (context, index) {
-                          final image = _pickedImages[index];
-                          return Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            width: 150,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: kIsWeb
-                                  ? Image.network(
-                                      image.path,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.file(
-                                      File(image.path),
-                                      fit: BoxFit.cover,
-                                    ),
+                  if (_pickedImages.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: () => setState(() => _pickedImages = []),
+                      icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red, size: 20),
+                      label: const Text('Clear All', style: TextStyle(color: Colors.red)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Image Picker Box/List
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: _pickedImages.isNotEmpty 
+                  ? ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _pickedImages.length + 1,
+                      padding: const EdgeInsets.all(12),
+                      itemBuilder: (context, index) {
+                        if (index == _pickedImages.length) {
+                          // "Add More" Button at end of list
+                          return GestureDetector(
+                            onTap: _pickImages,
+                            child: Container(
+                              width: 130,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate_outlined, color: Color(0xFFD4AF37), size: 30),
+                                  SizedBox(height: 8),
+                                  Text('Add More', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
                             ),
                           );
-                        },
-                      )
-                    : const Column(
+                        }
+                        
+                        final image = _pickedImages[index];
+                        return Stack(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(right: 12),
+                              width: 130,
+                              height: double.infinity,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[200]!),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: kIsWeb
+                                    ? Image.network(image.path, fit: BoxFit.cover)
+                                    : Image.file(File(image.path), fit: BoxFit.cover),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 16,
+                              child: GestureDetector(
+                                onTap: () => _removeSelectedImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, color: Colors.white, size: 14),
+                                ),
+                              ),
+                            ),
+                            if (index == 0)
+                              Positioned(
+                                bottom: 8,
+                                left: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFD4AF37).withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('MAIN', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    )
+                  : InkWell(
+                      onTap: _pickImages,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text('Pick Product Images (Select Multiple)', style: TextStyle(color: Colors.grey)),
+                          Icon(Icons.add_a_photo_outlined, size: 48, color: Color(0xFFD4AF37)),
+                          SizedBox(height: 12),
+                          Text(
+                            'Select Product Images',
+                            style: TextStyle(color: Color(0xFF4A342E), fontWeight: FontWeight.w500),
+                          ),
+                          SizedBox(height: 4),
+                          Text('Supports multiple images at once', style: TextStyle(color: Colors.grey, fontSize: 12)),
                         ],
                       ),
-                ),
+                    ),
               ),
               const SizedBox(height: 16),
               _buildTextField(_imageUrlController, 'Or Enter Image URL (Optional)'),
@@ -217,15 +332,28 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1, bool isNumeric = false}) {
+  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1, bool isNumeric = false, IconData? icon}) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
-        focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFD4AF37))),
+        prefixIcon: icon != null ? Icon(icon, color: const Color(0xFFD4AF37)) : null,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 2),
+        ),
       ),
       validator: (value) => value == null || value.isEmpty ? 'Field required' : null,
     );
