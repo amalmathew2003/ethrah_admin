@@ -27,6 +27,47 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
 
+  // Category selection variables (Loaded dynamically from database)
+  List<String> _categories = [];
+  String? _selectedCategory;
+  bool _isAddingNewCategory = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCategories();
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final supabase = Supabase.instance.client;
+      // Get unique categories from products table
+      final response = await supabase.from('products').select('category');
+      
+      final List<String> fetchedCategories = response
+          .map((row) => row['category'].toString().trim())
+          .where((cat) => cat.isNotEmpty && cat != 'null')
+          .toSet()
+          .toList()
+        ..sort(); // Sort alphabetically
+
+      setState(() {
+        _categories = fetchedCategories;
+        
+        // If we have categories, select the first one by default if none is selected
+        if (_categories.isNotEmpty && _selectedCategory == null) {
+          _selectedCategory = _categories.first;
+          _categoryController.text = _categories.first;
+        } else if (_categories.isEmpty) {
+          // If no categories exist in DB, start with "Adding New" mode
+          _isAddingNewCategory = true;
+        }
+      });
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
+    }
+  }
+
   Future<void> _pickImages() async {
     final List<XFile> selectedImages = await _picker.pickMultiImage();
     if (selectedImages.isNotEmpty) {
@@ -44,6 +85,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   Future<void> _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate Category
+    String finalCategory = _isAddingNewCategory 
+        ? _categoryController.text.trim() 
+        : (_selectedCategory ?? '').trim();
+
+    if (finalCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select or enter a category')),
+      );
+      return;
+    }
+
     if (_pickedImages.isEmpty && _imageUrlController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please pick images or provide a URL')),
@@ -62,7 +116,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       if (_pickedImages.isNotEmpty) {
         for (int i = 0; i < _pickedImages.length; i++) {
           final image = _pickedImages[i];
-          // Using a simple timestamp for filename to avoid "bucket is add" confusion
           final fileName = '${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
           final bytes = await image.readAsBytes();
           
@@ -83,14 +136,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
       // 2. Add to products table
       final productData = {
-        'name': _nameController.text,
-        'description': _descController.text,
+        'name': _nameController.text.trim(),
+        'description': _descController.text.trim(),
         'price': double.tryParse(_priceController.text) ?? 0.0,
         'image_url': mainImageUrl,
-        'gallery_images': galleryUrls, // Storing multiple images
-        'category': _categoryController.text,
-        'material': _materialController.text,
-        'care_instructions': _careController.text,
+        'gallery_images': galleryUrls,
+        'category': finalCategory,
+        'material': _materialController.text.trim(),
+        'care_instructions': _careController.text.trim(),
         'is_active': true,
       };
 
@@ -111,7 +164,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       _careController.clear();
       setState(() {
         _pickedImages = [];
+        _isAddingNewCategory = false;
       });
+      _fetchCategories(); // Refresh list
 
     } catch (e) {
       if (!mounted) return;
@@ -144,7 +199,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF4A342E),
-                  fontFamily: 'PlayfairDisplay',
                 ),
               ),
               const SizedBox(height: 24),
@@ -152,13 +206,61 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               const SizedBox(height: 16),
               _buildTextField(_descController, 'Description', maxLines: 3, icon: Icons.description_outlined),
               const SizedBox(height: 16),
+              
               Row(
                 children: [
                   Expanded(child: _buildTextField(_priceController, 'Price (₹)', isNumeric: true, icon: Icons.currency_rupee)),
                   const SizedBox(width: 16),
-                  Expanded(child: _buildTextField(_categoryController, 'Category', icon: Icons.category_outlined)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value: _isAddingNewCategory ? 'ADD_NEW' : _selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'Category',
+                            prefixIcon: const Icon(Icons.category_outlined, color: Color(0xFFD4AF37)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.grey[300]!),
+                            ),
+                          ),
+                          items: [
+                            ..._categories.map((cat) => DropdownMenuItem(
+                                  value: cat,
+                                  child: Text(cat),
+                                )),
+                            const DropdownMenuItem(
+                              value: 'ADD_NEW',
+                              child: Text('➕ Create New...', style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == 'ADD_NEW') {
+                                _isAddingNewCategory = true;
+                                _categoryController.clear();
+                              } else {
+                                _isAddingNewCategory = false;
+                                _selectedCategory = val;
+                                _categoryController.text = val ?? '';
+                              }
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
+              if (_isAddingNewCategory)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: _buildTextField(_categoryController, 'Enter New Category Name', icon: Icons.create_new_folder_outlined),
+                ),
+              
               const SizedBox(height: 24),
               
               // Image Picker Section Header
@@ -203,13 +305,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey[300]!),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: _pickedImages.isNotEmpty 
                   ? ListView.builder(
@@ -218,7 +313,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       padding: const EdgeInsets.all(12),
                       itemBuilder: (context, index) {
                         if (index == _pickedImages.length) {
-                          // "Add More" Button at end of list
                           return GestureDetector(
                             onTap: _pickImages,
                             child: Container(
@@ -226,7 +320,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.grey[50],
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+                                border: Border.all(color: Colors.grey[300]!),
                               ),
                               child: const Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -298,32 +392,28 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         children: [
                           Icon(Icons.add_a_photo_outlined, size: 48, color: Color(0xFFD4AF37)),
                           SizedBox(height: 12),
-                          Text(
-                            'Select Product Images',
-                            style: TextStyle(color: Color(0xFF4A342E), fontWeight: FontWeight.w500),
-                          ),
-                          SizedBox(height: 4),
-                          Text('Supports multiple images at once', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          Text('Select Product Images', style: TextStyle(color: Color(0xFF4A342E), fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
               ),
               const SizedBox(height: 16),
-              _buildTextField(_imageUrlController, 'Or Enter Image URL (Optional)'),
+              _buildTextField(_imageUrlController, 'Or Enter Image URL (Optional)', icon: Icons.link),
               const SizedBox(height: 16),
-              _buildTextField(_materialController, 'Material (e.g. Pure Silk)'),
+              _buildTextField(_materialController, 'Material (e.g. Pure Silk)', icon: Icons.style),
               const SizedBox(height: 16),
-              _buildTextField(_careController, 'Care Instructions'),
+              _buildTextField(_careController, 'Care Instructions', icon: Icons.info_outline),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _isLoading ? null : _addProduct,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: const Color(0xFFD4AF37),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: _isLoading 
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('ADD PRODUCT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  : const Text('ADD PRODUCT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
               ),
             ],
           ),
@@ -355,7 +445,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 2),
         ),
       ),
-      validator: (value) => value == null || value.isEmpty ? 'Field required' : null,
+      validator: (value) => value == null || value.trim().isEmpty ? 'Field required' : null,
     );
   }
 }
